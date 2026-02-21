@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
 import json
 
+import os
+
 INPUT_JSON = "assets/IntermediateReports/UncutForest.json"
+EXPLICIT_LIST = "assets/IntermediateReports/ExplicitPackages.txt"
+IMPLICIT_LIST = "assets/IntermediateReports/ImplicitPackages.txt"
 PRUNED_OUTPUT = "assets/IntermediateReports/PrunedForest.json"
 FULL_TREE_OUTPUT = "assets/IntermediateReports/FullTree.json"
+
+def load_list(filepath):
+    """Safely loads a simple text list of packages."""
+    if not os.path.exists(filepath):
+        return set()
+    with open(filepath, 'r') as f:
+        return set(line.strip() for line in f if line.strip())
 
 def build_nested_tree(forest, package, global_seen=None):
     """
@@ -35,11 +46,12 @@ def prune_forest():
     
     with open(INPUT_JSON, 'r') as f:
         forest = json.load(f)
+        
+    explicit_packages = load_list(EXPLICIT_LIST)
+    implicit_packages = load_list(IMPLICIT_LIST)
 
     # Set A: Every package explicitly listed on the system
     all_packages = set(forest.keys())
-
-    # Set B: Every package identified as a dependency by something else
     all_dependencies = set(dep for deps in forest.values() for dep in deps)
 
     # ---------------------------------------------------------
@@ -48,17 +60,23 @@ def prune_forest():
     # ---------------------------------------------------------
     pruned_forest = {}
     for pkg in sorted(list(all_packages)):
-        # Important Logic Override: "if some child node is a root (parent) 
-        # it preserves their root condition and should not be marked as dependecy"
-        # Therefore, if the node has its own children, it is a tree itself -> it is a Root!
-        has_children = len(forest.get(pkg, [])) > 0
-        
-        if has_children:
-            # It's a parent/tree! Give it sovereign Root priority.
+        # ENTERPRISE LOGIC OVERRIDE: 
+        # Bypass mathematical contradictions (like evdi-dkms vs glibc both being intermediate nodes).
+        # We query Pacman's absolute brain:
+        if pkg in explicit_packages:
+            # User explicitly ran `paru -S pkg`. It is absolutely a Principal Root.
             is_dependency = False
+        elif pkg in implicit_packages:
+            # It was pulled in automatically as a dependency (`paru -S --asdeps`).
+            is_dependency = True
         else:
-            # It is a leaf node. It is only a dependency if something explicitly requires it.
-            is_dependency = pkg in all_dependencies
+            # Fallback for custom lists not reflecting the current host DB (DAG graph analysis).
+            # If it has children, assume it's a tree/root. Else, it's a dependency leaf.
+            has_children = len(forest.get(pkg, [])) > 0
+            if has_children:
+                is_dependency = False
+            else:
+                is_dependency = pkg in all_dependencies
         
         pruned_forest[pkg] = {
             "is_dependency": is_dependency,

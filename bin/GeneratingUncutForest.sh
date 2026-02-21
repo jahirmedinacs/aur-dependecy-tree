@@ -4,8 +4,12 @@
 INPUT_FILE="assets/PackagesListParu.txt"
 JSON_OUT="assets/IntermediateReports/UncutForest.json"
 
-echo "--> 1. Stripping versions from master list..."
+echo "--> 1. Creating raw source-of-truth install lists..."
 awk '{print $1}' "$INPUT_FILE" | sort -u > assets/IntermediateReports/TempPkgList.txt
+
+# Create ground-truth explicit and implicit lists for perfect root classification
+paru -Qqe > assets/IntermediateReports/ExplicitPackages.txt 2>/dev/null
+paru -Qqd > assets/IntermediateReports/ImplicitPackages.txt 2>/dev/null
 
 echo "--> 2. Querying paru for full dependency graph (this takes a moment)..."
 # COLUMNS=10000 prevents line-wrapping. LANG=C forces English output for safe parsing.
