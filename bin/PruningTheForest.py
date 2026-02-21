@@ -46,16 +46,19 @@ def prune_forest():
     # 1. Structure the Map (PrunedForest.json)
     # Every package listed exactly once, tagged with its status.
     # ---------------------------------------------------------
-    # Mathematical Root definition: Everything on the system minus all downstream dependencies
-    true_roots = all_packages - all_dependencies
-
     pruned_forest = {}
     for pkg in sorted(list(all_packages)):
-        # Important Logic Override: "If a node under any given root is also a root, 
-        # the root takes priority and should not be treated as dependency."
-        # This means `is_dependency` is ONLY true if it belongs to `all_dependencies` 
-        # AND it is NOT a known True Root in its own right in this installation blueprint.
-        is_dependency = (pkg in all_dependencies) and (pkg not in true_roots)
+        # Important Logic Override: "if some child node is a root (parent) 
+        # it preserves their root condition and should not be marked as dependecy"
+        # Therefore, if the node has its own children, it is a tree itself -> it is a Root!
+        has_children = len(forest.get(pkg, [])) > 0
+        
+        if has_children:
+            # It's a parent/tree! Give it sovereign Root priority.
+            is_dependency = False
+        else:
+            # It is a leaf node. It is only a dependency if something explicitly requires it.
+            is_dependency = pkg in all_dependencies
         
         pruned_forest[pkg] = {
             "is_dependency": is_dependency,
@@ -67,10 +70,11 @@ def prune_forest():
 
     # ---------------------------------------------------------
     # 2. Build the Visual Hierarchy (FullTree.json)
-    # ONLY builds down from the absolute True Roots.
     # ---------------------------------------------------------
+    true_roots = [pkg for pkg, data in pruned_forest.items() if not data["is_dependency"]]
+
     full_tree = {}
-    for root in sorted(list(true_roots)):
+    for root in sorted(true_roots):
         full_tree[root] = build_nested_tree(forest, root)
 
     with open(FULL_TREE_OUTPUT, 'w') as f:

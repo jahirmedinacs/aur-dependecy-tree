@@ -24,8 +24,9 @@ def find_super_roots():
         return
 
     try:
+        # Switch to -Qi to query the local database so we can see "Required By"
         result = subprocess.run(
-            ['paru', '-Si'] + roots,
+            ['paru', '-Qi'] + roots,
             capture_output=True, text=True, env={"LANG": "C", "COLUMNS": "10000"}
         )
     except FileNotFoundError:
@@ -33,29 +34,46 @@ def find_super_roots():
         return
 
     current_pkg = None
+    current_groups = []
+    is_required_by_others = False
+
     for line in result.stdout.split('\n'):
         # Catch the package name
         if line.startswith("Name") and ":" in line:
             current_pkg = line.split(":", 1)[1].strip()
+            current_groups = []
+            is_required_by_others = False
             
         # Catch the group(s)
         elif line.startswith("Groups") and current_pkg:
             groups_str = line.split(":", 1)[1].strip()
-            
             if groups_str and groups_str != "None":
-                # Some packages belong to multiple groups, so we split them
-                for group in groups_str.split():
-                    if group not in grouped_forest:
-                        grouped_forest[group] = []
-                    grouped_forest[group].append(current_pkg)
-            else:
-                standalone.append(current_pkg)
-                
-            # Lock until the next package name
-            current_pkg = None
+                current_groups = groups_str.split()
 
-    # Structure the final JSON map alongside the preserved dependencies
-    # Any package that had `is_dependency: True` goes natively here
+        # Catch if it is required by something else
+        elif line.startswith("Required By") and current_pkg:
+            req_by_str = line.split(":", 1)[1].strip()
+            if req_by_str != "None":
+                is_required_by_others = True
+
+        # End of a package block (empty line usually separates blocks in pacman -Qi)
+        elif not line.strip() and current_pkg:
+            # If the user's heuristic says "it's required by something", demote it back to a dependency!
+            if is_required_by_others:
+                # Demote it: flag it in the pruned_map as a dependency so it gets gathered below
+                pruned_map[current_pkg]["is_dependency"] = True
+            else:
+                # It's a true Principal Root!
+                if current_groups:
+                    for group in current_groups:
+                        if group not in grouped_forest:
+                            grouped_forest[group] = []
+                        grouped_forest[group].append(current_pkg)
+                else:
+                    standalone.append(current_pkg)
+            
+            # Reset
+            current_pkg = None
     dependencies_map = {pkg: data for pkg, data in pruned_map.items() if data.get("is_dependency", True)}
 
     final_output = {
