@@ -44,12 +44,14 @@ If you don't supply a package list in `assets/PackagesListParu.txt`, the `Setup`
 
 ## Utility: Cross-Host Consensus
 
-If you are managing multiple machines and want to find a safe "lowest common denominator" of packages to install universally:
+If you are managing multiple machines and want to compare a master blueprint against a specific host's current state:
 
-1. Drop your reference hosts (the machines you want to mimic) into `QuickUtils/ToReplicate/` as text files.
-2. Drop the packages from secondary hosts into `QuickUtils/ToCompare/`.
+1. Drop your Master Blueprint (the machine you want to replicate) into `QuickUtils/ToReplicate/` as a text file.
+2. Drop the packages from your secondary host into `QuickUtils/ToCompare/`.
 3. Run the consensus task:
 ```bash
-task Compare
+go-task Compare
 ```
-This utility mathematically calculates the strict intersection between the replicated hosts and the compared hosts, outputting a highly refined `assets/Consensus/ConsensusList.txt` that works natively safely across all defined machines.
+This utility mathematically treats the `ToReplicate` list as the absolute source of truth and uses the `ToCompare` lists as a filter, outputting two clean JSON lists:
+* `assets/Consensus/ToInstall.json` (Packages in the Master blueprint that the host is missing).
+* `assets/Consensus/AlreadyExists.json` (Packages in the Master blueprint that the host already has satisfied).

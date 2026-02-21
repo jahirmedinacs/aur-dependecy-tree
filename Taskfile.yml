@@ -9,11 +9,7 @@ tasks:
     desc: "Ensure directories exist and input list is present"
     cmds:
       - mkdir -p bin assets/IntermediateReports report QuickUtils/ToCompare QuickUtils/ToReplicate assets/Consensus
-      - |
-        if [ ! -f assets/PackagesListParu.txt ]; then
-          echo "No list found. Generating from current system..."
-          paru -Qq > assets/PackagesListParu.txt
-        fi
+      - bash -c 'if [ ! -s assets/PackagesListParu.txt ]; then echo "Generating package list..."; paru -Qq > assets/PackagesListParu.txt; fi'
 
   GenerateUncut:
     desc: "Step 1: The Uncut Forest"

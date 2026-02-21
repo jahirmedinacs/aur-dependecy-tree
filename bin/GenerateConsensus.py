@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import os
 import sys
+import json
 
 TO_COMPARE_DIR = "QuickUtils/ToCompare"
 TO_REPLICATE_DIR = "QuickUtils/ToReplicate"
 CONSENSUS_DIR = "assets/Consensus"
-OUTPUT_FILE = f"{CONSENSUS_DIR}/ConsensusList.txt"
+TO_INSTALL_FILE = f"{CONSENSUS_DIR}/ToInstall.json"
+ALREADY_EXISTS_FILE = f"{CONSENSUS_DIR}/AlreadyExists.json"
 
 def load_packages(filepath):
     """Reads a file and returns a set of package names, stripping versions."""
@@ -33,46 +35,50 @@ def generate_consensus():
     # 1. Ensure output directory exists
     os.makedirs(CONSENSUS_DIR, exist_ok=True)
 
-    # 2. Gather ToReplicate packages (Our Reference/Base)
-    print(f"📂 Scanning reference lists in {TO_REPLICATE_DIR}/...")
+    # 2. Gather ToReplicate packages (Our Master Blueprint)
+    print(f"📂 Scanning master blueprints in {TO_REPLICATE_DIR}/...")
     replicate_files = [f for f in os.listdir(TO_REPLICATE_DIR) if os.path.isfile(os.path.join(TO_REPLICATE_DIR, f))]
     if not replicate_files:
-        print(f"❌ Error: No reference lists found in {TO_REPLICATE_DIR}/ to replicate.")
+        print(f"❌ Error: No master blueprint lists found in {TO_REPLICATE_DIR}/.")
         sys.exit(1)
 
-    reference_packages = set()
+    master_packages = set()
     for file in replicate_files:
-        reference_packages.update(load_packages(os.path.join(TO_REPLICATE_DIR, file)))
-    print(f"   -> Loaded {len(reference_packages)} unique reference packages.")
+        master_packages.update(load_packages(os.path.join(TO_REPLICATE_DIR, file)))
+    print(f"   -> Loaded {len(master_packages)} unique packages from the Master Blueprint.")
 
-    # 3. Gather ToCompare packages (Other Computers/Secondary)
-    print(f"📂 Scanning comparison lists in {TO_COMPARE_DIR}/...")
+    # 3. Gather ToCompare packages (The Host Machine's Current State)
+    print(f"📂 Scanning host state lists in {TO_COMPARE_DIR}/...")
     compare_files = [f for f in os.listdir(TO_COMPARE_DIR) if os.path.isfile(os.path.join(TO_COMPARE_DIR, f))]
     
-    if not compare_files:
-        print("💡 No secondary lists found to compare. The consensus will just be the reference.")
-        consensus_packages = reference_packages
-    else:
-        compare_packages = set()
+    host_packages = set()
+    if compare_files:
         for file in compare_files:
-            compare_packages.update(load_packages(os.path.join(TO_COMPARE_DIR, file)))
-        
-        print(f"   -> Loaded {len(compare_packages)} unique comparison packages.")
-        
-        # The Consensus: We want the packages that exist in our absolute references 
-        # (ToReplicate) and potentially find the intersection or union.
-        # Based on the prompt "re install on the host machine", a strict Intersection
-        # provides only the guaranteed overlapping consensus, while a Union provides
-        # an amalgamation. We will generate the strict Intersection (Consensus)
-        consensus_packages = reference_packages.intersection(compare_packages)
-        print(f"   -> Consensus Intersection: {len(consensus_packages)} packages overlap.")
+            host_packages.update(load_packages(os.path.join(TO_COMPARE_DIR, file)))
+        print(f"   -> Loaded {len(host_packages)} unique packages currently on the Host.")
+    else:
+        print("💡 No host lists found in ToCompare. Assuming the host is completely empty.")
 
-    # 4. Output the result
-    with open(OUTPUT_FILE, "w") as f:
-        for pkg in sorted(list(consensus_packages)):
-            f.write(pkg + "\n")
+    # 4. Calculate Consensus
+    # To Install: Packages in the master blueprint that are NOT on the host
+    to_install = master_packages - host_packages
+    
+    # Already Exists: Packages in the master blueprint that ARE already on the host
+    already_exists = master_packages.intersection(host_packages)
 
-    print(f"\n✅ Perfect! Output saved to: {OUTPUT_FILE}")
+    print(f"   -> Analysis: {len(to_install)} packages need to be installed.")
+    print(f"   -> Analysis: {len(already_exists)} packages are already satisfied.")
+
+    # 5. Output the results as JSON
+    with open(TO_INSTALL_FILE, "w") as f:
+        json.dump(sorted(list(to_install)), f, indent=4)
+        
+    with open(ALREADY_EXISTS_FILE, "w") as f:
+        json.dump(sorted(list(already_exists)), f, indent=4)
+
+    print(f"\n✅ Perfect! Output saved to:")
+    print(f"   📄 {TO_INSTALL_FILE}")
+    print(f"   📄 {ALREADY_EXISTS_FILE}")
 
 if __name__ == "__main__":
     generate_consensus()
