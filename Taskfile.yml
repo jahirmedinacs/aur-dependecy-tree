@@ -1,0 +1,51 @@
+version: '3'
+
+tasks:
+  Default:
+    desc: "Run the full Arch Migration Pipeline"
+    deps: [SanityCheck]
+
+  Setup:
+    desc: "Ensure directories exist and input list is present"
+    cmds:
+      - mkdir -p bin assets/IntermediateReports report
+      - |
+        if [ ! -f assets/PackagesListParu.txt ]; then
+          echo "No list found. Generating from current system..."
+          paru -Qq > assets/PackagesListParu.txt
+        fi
+
+  GenerateUncut:
+    desc: "Step 1: The Uncut Forest"
+    deps: [Setup]
+    cmds:
+      - bash bin/GeneratingUncutForest.sh
+
+  Prune:
+    desc: "Step 2: Pruning the Forest"
+    deps: [GenerateUncut]
+    cmds:
+      - python3 bin/PruningTheForest.py
+
+  FindSuperRoots:
+    desc: "Step 3: Finding Super Roots"
+    deps: [Prune]
+    cmds:
+      - python3 bin/FindingSuperRoots.py
+
+  Optimize:
+    desc: "Step 4: Optimizing the Forest"
+    deps: [FindSuperRoots]
+    cmds:
+      - python3 bin/OptimizingTheForest.py
+
+  SanityCheck:
+    desc: "Step 5: The Sanity Check"
+    deps: [Optimize]
+    cmds:
+      - python3 bin/SanityCheck.py
+
+  Clean:
+    desc: "Clean generated reports"
+    cmds:
+      - rm -rf report/*.json assets/IntermediateReports/*

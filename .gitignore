@@ -1,0 +1,4 @@
+assets/PackagesListParu.txt
+assets/IntermediateReports/*
+report/*
+!report/.gitkeep
