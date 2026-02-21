@@ -2,83 +2,133 @@
 import os
 import sys
 import json
+import fnmatch
 
 TO_COMPARE_DIR = "QuickUtils/ToCompare"
 TO_REPLICATE_DIR = "QuickUtils/ToReplicate"
 CONSENSUS_DIR = "assets/Consensus"
-TO_INSTALL_FILE = f"{CONSENSUS_DIR}/ToInstall.json"
-ALREADY_EXISTS_FILE = f"{CONSENSUS_DIR}/AlreadyExists.json"
 
-def load_packages(filepath):
-    """Reads a file and returns a set of package names, stripping versions."""
-    packages = set()
+TO_INSTALL_FOREST = f"{CONSENSUS_DIR}/ToInstall_OptimizedForest.json"
+ALREADY_EXISTS_FOREST = f"{CONSENSUS_DIR}/AlreadyExists_OptimizedForest.json"
+TO_INSTALL_MISSING = f"{CONSENSUS_DIR}/ToInstall_MissingPackages.json"
+ALREADY_EXISTS_MISSING = f"{CONSENSUS_DIR}/AlreadyExists_MissingPackages.json"
+
+def load_json(filepath):
+    """Safely loads a JSON file."""
     try:
         with open(filepath, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                # Split allows parsing formats like `core/pkgname 1.0`
-                pkg = line.split()[0]
-                # Arch quirks: Strip version constraints
-                for sym in ['>=', '<=', '=', '>', '<']:
-                    if sym in pkg:
-                        pkg = pkg.split(sym)[0]
-                packages.add(pkg)
+            return json.load(f)
     except FileNotFoundError:
         print(f"⚠️  Warning: {filepath} not found.")
-    return packages
+        return None
+    except json.JSONDecodeError:
+        print(f"❌ Error: {filepath} is not valid JSON.")
+        return None
+
+def find_file(directory, pattern):
+    """Finds the first file matching a pattern in a directory."""
+    for f in os.listdir(directory):
+        if fnmatch.fnmatch(f, pattern):
+            return os.path.join(directory, f)
+    return None
+
+def compare_forests(master, host):
+    """Compares two OptimizedForest DAGs (SuperRoots + StandalonePackages)."""
+    to_install = {"SuperRoots": {}, "StandalonePackages": []}
+    already_exists = {"SuperRoots": {}, "StandalonePackages": []}
+
+    # Normalize inputs: if they are flat lists, treat them as StandalonePackages (e.g., legacy MissingPackages)
+    master_dict = master if isinstance(master, dict) else {"SuperRoots": {}, "StandalonePackages": master if isinstance(master, list) else []}
+    host_dict = host if isinstance(host, dict) else {"SuperRoots": {}, "StandalonePackages": host if isinstance(host, list) else []}
+
+    # 1. Compare Standalone Packages (1-to-1)
+    master_standalone = set(master_dict.get("StandalonePackages", []))
+    host_standalone = set(host_dict.get("StandalonePackages", []))
+
+    to_install["StandalonePackages"] = sorted(list(master_standalone - host_standalone))
+    already_exists["StandalonePackages"] = sorted(list(master_standalone.intersection(host_standalone)))
+
+    # 2. Compare Super Roots (Group-by-Group, then Package-by-Package)
+    master_roots = master_dict.get("SuperRoots", {})
+    host_roots = host_dict.get("SuperRoots", {})
+
+    for group, m_pkgs in master_roots.items():
+        m_set = set(m_pkgs)
+        if group in host_roots:
+            # Group exists on both. Compare packages inside lazily.
+            h_set = set(host_roots[group])
+            
+            missing_pkgs = m_set - h_set
+            existing_pkgs = m_set.intersection(h_set)
+            
+            if missing_pkgs:
+                to_install["SuperRoots"][group] = sorted(list(missing_pkgs))
+            if existing_pkgs:
+                already_exists["SuperRoots"][group] = sorted(list(existing_pkgs))
+        else:
+            # Group is completely missing from host. Add all to ToInstall.
+            to_install["SuperRoots"][group] = sorted(list(m_set))
+
+    return to_install, already_exists
+
+# (compare_flat_lists function removed in favor of recursive DAG union logic)
 
 def generate_consensus():
-    print("🤝 Starting Consensus Generation...")
+    print("🤝 Starting JSON DAG Consensus Generation...")
 
-    # 1. Ensure output directory exists
     os.makedirs(CONSENSUS_DIR, exist_ok=True)
 
-    # 2. Gather ToReplicate packages (Our Master Blueprint)
-    print(f"📂 Scanning master blueprints in {TO_REPLICATE_DIR}/...")
-    replicate_files = [f for f in os.listdir(TO_REPLICATE_DIR) if os.path.isfile(os.path.join(TO_REPLICATE_DIR, f))]
-    if not replicate_files:
-        print(f"❌ Error: No master blueprint lists found in {TO_REPLICATE_DIR}/.")
-        sys.exit(1)
+    # ==========================================
+    # 1. Compare OptimizedForest.json
+    # ==========================================
+    master_forest_path = find_file(TO_REPLICATE_DIR, "*OptimizedForest.json")
+    host_forest_path = find_file(TO_COMPARE_DIR, "*OptimizedForest.json")
 
-    master_packages = set()
-    for file in replicate_files:
-        master_packages.update(load_packages(os.path.join(TO_REPLICATE_DIR, file)))
-    print(f"   -> Loaded {len(master_packages)} unique packages from the Master Blueprint.")
-
-    # 3. Gather ToCompare packages (The Host Machine's Current State)
-    print(f"📂 Scanning host state lists in {TO_COMPARE_DIR}/...")
-    compare_files = [f for f in os.listdir(TO_COMPARE_DIR) if os.path.isfile(os.path.join(TO_COMPARE_DIR, f))]
-    
-    host_packages = set()
-    if compare_files:
-        for file in compare_files:
-            host_packages.update(load_packages(os.path.join(TO_COMPARE_DIR, file)))
-        print(f"   -> Loaded {len(host_packages)} unique packages currently on the Host.")
-    else:
-        print("💡 No host lists found in ToCompare. Assuming the host is completely empty.")
-
-    # 4. Calculate Consensus
-    # To Install: Packages in the master blueprint that are NOT on the host
-    to_install = master_packages - host_packages
-    
-    # Already Exists: Packages in the master blueprint that ARE already on the host
-    already_exists = master_packages.intersection(host_packages)
-
-    print(f"   -> Analysis: {len(to_install)} packages need to be installed.")
-    print(f"   -> Analysis: {len(already_exists)} packages are already satisfied.")
-
-    # 5. Output the results as JSON
-    with open(TO_INSTALL_FILE, "w") as f:
-        json.dump(sorted(list(to_install)), f, indent=4)
+    if master_forest_path:
+        print(f"📂 Analyzing DAG: {master_forest_path}")
+        master_forest = load_json(master_forest_path)
+        host_forest = load_json(host_forest_path) if host_forest_path else {"SuperRoots": {}, "StandalonePackages": []}
         
-    with open(ALREADY_EXISTS_FILE, "w") as f:
-        json.dump(sorted(list(already_exists)), f, indent=4)
+        if host_forest_path:
+            print(f"📂 Comparing against host DAG: {host_forest_path}")
+        else:
+            print(f"💡 No host DAG found in {TO_COMPARE_DIR}/. Assuming host is empty.")
 
-    print(f"\n✅ Perfect! Output saved to:")
-    print(f"   📄 {TO_INSTALL_FILE}")
-    print(f"   📄 {ALREADY_EXISTS_FILE}")
+        if master_forest:
+            install_forest, exists_forest = compare_forests(master_forest, host_forest)
+            
+            with open(TO_INSTALL_FOREST, "w") as f:
+                json.dump(install_forest, f, indent=4)
+            with open(ALREADY_EXISTS_FOREST, "w") as f:
+                json.dump(exists_forest, f, indent=4)
+            
+            print(f"   ✅ Saved {TO_INSTALL_FOREST}")
+            print(f"   ✅ Saved {ALREADY_EXISTS_FOREST}")
+    else:
+        print(f"❌ Error: Could not find any OptimizedForest.json in {TO_REPLICATE_DIR}/.")
+
+    # ==========================================
+    # 2. Compare MissingPackages.json
+    # ==========================================
+    master_missing_path = find_file(TO_REPLICATE_DIR, "*MissingPackages.json")
+    host_missing_path = find_file(TO_COMPARE_DIR, "*MissingPackages.json")
+
+    if master_missing_path:
+        print(f"\n📂 Analyzing MissingList: {master_missing_path}")
+        master_missing = load_json(master_missing_path)
+        host_missing = load_json(host_missing_path) if host_missing_path else []
+
+        install_missing, exists_missing = compare_forests(master_missing, host_missing)
+        
+        with open(TO_INSTALL_MISSING, "w") as f:
+            json.dump(install_missing, f, indent=4)
+        with open(ALREADY_EXISTS_MISSING, "w") as f:
+            json.dump(exists_missing, f, indent=4)
+            
+        print(f"   ✅ Saved {TO_INSTALL_MISSING}")
+        print(f"   ✅ Saved {ALREADY_EXISTS_MISSING}")
+    else:
+        print(f"\n💡 Note: No MissingPackages.json found in {TO_REPLICATE_DIR}/ to compare.")
 
 if __name__ == "__main__":
     generate_consensus()
