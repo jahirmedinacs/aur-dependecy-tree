@@ -41,3 +41,15 @@ task Default
 ```
 
 If you don't supply a package list in `assets/PackagesListParu.txt`, the `Setup` task will automatically generate one for your current system by fetching `paru -Qq`.
+
+## Utility: Cross-Host Consensus
+
+If you are managing multiple machines and want to find a safe "lowest common denominator" of packages to install universally:
+
+1. Drop your reference hosts (the machines you want to mimic) into `QuickUtils/ToReplicate/` as text files.
+2. Drop the packages from secondary hosts into `QuickUtils/ToCompare/`.
+3. Run the consensus task:
+```bash
+task Compare
+```
+This utility mathematically calculates the strict intersection between the replicated hosts and the compared hosts, outputting a highly refined `assets/Consensus/ConsensusList.txt` that works natively safely across all defined machines.

@@ -8,7 +8,7 @@ tasks:
   Setup:
     desc: "Ensure directories exist and input list is present"
     cmds:
-      - mkdir -p bin assets/IntermediateReports report
+      - mkdir -p bin assets/IntermediateReports report QuickUtils/ToCompare QuickUtils/ToReplicate assets/Consensus
       - |
         if [ ! -f assets/PackagesListParu.txt ]; then
           echo "No list found. Generating from current system..."
@@ -45,7 +45,19 @@ tasks:
     cmds:
       - python3 bin/SanityCheck.py
 
+  # ----------------------------------------
+  # Utilities
+  # ----------------------------------------
+  GenerateConsensus:
+    desc: "Utility: Compare host package list against reference replicates to establish core consensus"
+    cmds:
+      - python3 bin/GenerateConsensus.py
+
+  Compare:
+    desc: "Alias for GenerateConsensus"
+    deps: [GenerateConsensus]
+
   Clean:
     desc: "Clean generated reports"
     cmds:
-      - rm -rf report/*.json assets/IntermediateReports/*
+      - rm -rf report/*.json assets/IntermediateReports/* assets/Consensus/*

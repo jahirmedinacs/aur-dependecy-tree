@@ -1,4 +1,13 @@
 assets/PackagesListParu.txt
 assets/IntermediateReports/*
+assets/IntermediateReports/TempPkgList.txt
+assets/IntermediateReports/TempParuRaw.txt
+assets/Consensus/*
+!assets/Consensus/.gitkeep
+!assets/IntermediateReports/.gitkeep
 report/*
 !report/.gitkeep
+QuickUtils/ToCompare/*
+!QuickUtils/ToCompare/.gitkeep
+QuickUtils/ToReplicate/*
+!QuickUtils/ToReplicate/.gitkeep
