@@ -59,9 +59,9 @@ tasks:
       - python3 bin/PrepareInstallationList.py
 
   Clean:
-    desc: "Clean generated reports"
+    desc: "Clean generated reports and input lists to ensure a pristine state for syncing or committing"
     cmds:
-      - rm -rf report/*.json assets/IntermediateReports/* assets/Consensus/*
+      - rm -rf report/* assets/IntermediateReports/* assets/Consensus/* assets/PackagesListParu.txt
 
   PrepCommit:
     desc: "Wipe all generated JSON/TXT artifacts before a git commit to ensure a pristine tree"

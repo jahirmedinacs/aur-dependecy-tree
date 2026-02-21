@@ -51,11 +51,18 @@ def prepare_installation_list():
     implicit_deps = sorted(list(set(implicit_deps)))
 
     # Process MissingPackages (these go as comments)
-    missing_comments = []
+    missing_explicit = []
+    missing_implicit = []
     if missing:
-        missing_pkgs = missing.get("StandalonePackages", [])
-        if missing_pkgs:
-            missing_comments = sorted(list(set(missing_pkgs)))
+        if isinstance(missing, list):
+            missing_explicit = sorted(missing)
+        else:
+            missing_explicit = sorted(list(set(missing.get("StandalonePackages", []))))
+            deps = missing.get("Dependencies", {})
+            if isinstance(deps, dict):
+                missing_implicit = sorted(list(deps.keys()))
+            elif isinstance(deps, list):
+                missing_implicit = sorted(deps)
 
     # Output to File
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
@@ -78,19 +85,29 @@ def prepare_installation_list():
                 f.write(pkg + "\n")
 
         # Write missing packages as comments
-        if missing_comments:
+        if missing_explicit:
             f.write("\n\n# ==========================================\n")
-            f.write("# MISSING PACKAGES (Virtual / Overlays)\n")
+            f.write("# [3] MISSING PRINCIPAL ROOTS (Explicitly installed)\n")
             f.write("# Review these manually. Often perfectly fine to skip.\n")
             f.write("# ==========================================\n")
-            for pkg in missing_comments:
+            for pkg in missing_explicit:
+                f.write(f"# {pkg}\n")
+                
+        if missing_implicit:
+            f.write("\n\n# ==========================================\n")
+            f.write("# [4] MISSING NATIVE DEPENDENCIES (--asdeps)\n")
+            f.write("# Safely ignored mostly. Only install if absolutely needed.\n")
+            f.write("# ==========================================\n")
+            for pkg in missing_implicit:
                 f.write(f"# {pkg}\n")
 
     print(f"✅ Perfectly compiled {len(explicit_list)} Principal Roots!")
     if implicit_deps:
         print(f"✅ Compiled {len(implicit_deps)} strict Dependencies (--asdeps).")
-    if missing_comments:
-        print(f"   (Appended {len(missing_comments)} missing packages as comments at the bottom).")
+    if missing_explicit:
+        print(f"   (Appended {len(missing_explicit)} explicit missing packages as comments).")
+    if missing_implicit:
+        print(f"   (Appended {len(missing_implicit)} implicit missing packages as comments).")
     print(f"\n💾 Saved to: {OUTPUT_FILE}")
 
 if __name__ == "__main__":

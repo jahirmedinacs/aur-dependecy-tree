@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
+import os
 import json
 import sys
 
 ORIGINAL_LIST = "assets/PackagesListParu.txt"
 UNCUT_FOREST = "assets/IntermediateReports/UncutForest.json"
 OPTIMIZED_FOREST = "report/OptimizedForest.json"
+
+def load_list(filepath):
+    """Safely loads a simple text list of packages."""
+    if not os.path.exists(filepath):
+        return set()
+    with open(filepath, 'r') as f:
+        return set(line.strip() for line in f if line.strip())
+
 
 def sanity_check():
     print("🕵️  Starting Sanity Check: Re-growing the tree...")
@@ -89,10 +98,20 @@ def sanity_check():
         print("\nMissing packages for your review:")
         for m in sorted(list(missing)):
             print(f" - {m}")
+        explicit_packages = load_list("assets/IntermediateReports/ExplicitPackages.txt")
+        implicit_packages = load_list("assets/IntermediateReports/ImplicitPackages.txt")
+        
+        missing_explicit = sorted([p for p in missing if p in explicit_packages or (p not in explicit_packages and p not in implicit_packages)])
+        missing_implicit = sorted([p for p in missing if p in implicit_packages])
+
+        missing_json_obj = {
+            "StandalonePackages": missing_explicit,
+            "Dependencies": {pkg: {"is_dependency": True, "dependencies": []} for pkg in missing_implicit}
+        }
             
         with open("report/MissingPackages.json", "w") as f:
-            json.dump(sorted(list(missing)), f, indent=4)
-        print("\n💾 Saved missing packages to: report/MissingPackages.json")
+            json.dump(missing_json_obj, f, indent=4)
+        print("\n💾 Saved structured missing packages to: report/MissingPackages.json")
 
 if __name__ == "__main__":
     sanity_check()
