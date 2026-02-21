@@ -28,20 +28,27 @@ def prepare_installation_list():
         print(f"❌ Error: Could not load {INSTALL_FOREST_JSON}. Have you run 'go-task Compare' yet?")
         return
 
-    # Extract all elements that are strictly installable based on the DAG
-    install_list = []
+    # Extract all elements that are explicitly installable roots
+    explicit_list = []
 
     # 1. Grab the Group Roots (e.g., plasma, base-devel)
     super_roots = forest.get("SuperRoots", {})
     for group, pkgs in super_roots.items():
-        install_list.append(group)
+        explicit_list.append(group)
 
     # 2. Grab all StandalonePackages
     standalone = forest.get("StandalonePackages", [])
-    install_list.extend(standalone)
+    explicit_list.extend(standalone)
+
+    # 3. Grab all Implicit Dependencies directly
+    implicit_deps = []
+    dependencies = forest.get("Dependencies", {})
+    if isinstance(dependencies, dict):
+        implicit_deps.extend(dependencies.keys())
 
     # Clean up and deduplicate just in case
-    install_list = sorted(list(set(install_list)))
+    explicit_list = sorted(list(set(explicit_list)))
+    implicit_deps = sorted(list(set(implicit_deps)))
 
     # Process MissingPackages (these go as comments)
     missing_comments = []
@@ -55,27 +62,36 @@ def prepare_installation_list():
     with open(OUTPUT_FILE, "w") as f:
         f.write("# ==========================================\n")
         f.write("# FINIALIZED ARCH MIGRATION INSTALL LIST\n")
-        f.write("# Generated from the Consensus DAG\n")
         f.write("# ==========================================\n\n")
 
-        # Write core installable packages
-        for pkg in install_list:
+        f.write("# [1] PRINCIPAL ROOTS\n")
+        f.write("# Install Explicitly: `paru -S $(< explicit_list)`\n")
+        f.write("# ------------------------------------------\n")
+        for pkg in explicit_list:
             f.write(pkg + "\n")
+
+        if implicit_deps:
+            f.write("\n\n# [2] NATIVE DEPENDENCIES\n")
+            f.write("# Install Implicitly: `paru -S --asdeps $(< implicit_list)`\n")
+            f.write("# ------------------------------------------\n")
+            for pkg in implicit_deps:
+                f.write(pkg + "\n")
 
         # Write missing packages as comments
         if missing_comments:
-            f.write("\n# ==========================================\n")
+            f.write("\n\n# ==========================================\n")
             f.write("# MISSING PACKAGES (Virtual / Overlays)\n")
             f.write("# Review these manually. Often perfectly fine to skip.\n")
             f.write("# ==========================================\n")
             for pkg in missing_comments:
                 f.write(f"# {pkg}\n")
 
-    print(f"✅ Perfectly compiled {len(install_list)} root packages!")
+    print(f"✅ Perfectly compiled {len(explicit_list)} Principal Roots!")
+    if implicit_deps:
+        print(f"✅ Compiled {len(implicit_deps)} strict Dependencies (--asdeps).")
     if missing_comments:
         print(f"   (Appended {len(missing_comments)} missing packages as comments at the bottom).")
     print(f"\n💾 Saved to: {OUTPUT_FILE}")
-    print("\n🚀 Ready to run: paru -S $(< report/FinalInstallationList.txt)")
 
 if __name__ == "__main__":
     prepare_installation_list()

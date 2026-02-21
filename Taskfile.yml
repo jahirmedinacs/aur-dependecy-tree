@@ -53,6 +53,11 @@ tasks:
     desc: "Alias for GenerateConsensus"
     deps: [GenerateConsensus]
 
+  PrepareInstallationList:
+    desc: "Utility: Flattens the ToInstall consensus JSONs into a single runnable installation text file"
+    cmds:
+      - python3 bin/PrepareInstallationList.py
+
   Clean:
     desc: "Clean generated reports"
     cmds:

@@ -35,9 +35,12 @@ def optimize_forest():
             pruned_groups_count += 1
 
     # Step 3: Save the mathematically perfect, non-overlapping graph
+    dependencies = data.get("Dependencies", {})
+
     final_output = {
         "SuperRoots": optimized_roots,
-        "StandalonePackages": standalone
+        "StandalonePackages": standalone,
+        "Dependencies": dependencies
     }
 
     with open(OUTPUT_JSON, 'w') as f:

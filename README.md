@@ -53,5 +53,17 @@ If you are managing multiple machines and want to compare a master blueprint aga
 go-task Compare
 ```
 This utility mathematically treats the `ToReplicate` list as the absolute source of truth and uses the `ToCompare` lists as a filter, outputting two clean JSON lists:
-* `assets/Consensus/ToInstall.json` (Packages in the Master blueprint that the host is missing).
-* `assets/Consensus/AlreadyExists.json` (Packages in the Master blueprint that the host already has satisfied).
+* `assets/Consensus/ToInstall_OptimizedForest.json` (Packages in the Master blueprint that the host is missing).
+* `assets/Consensus/AlreadyExists_OptimizedForest.json` (Packages in the Master blueprint that the host already has satisfied).
+
+*(The identical structural breakdown is mapped for the `MissingPackages.json` analysis).*
+
+### Preparing the Final Installer
+
+Once you have generated your consensus, you can easily compile it into a simple flat text file for `pacman` or `paru` to ingest:
+```bash
+go-task PrepareInstallationList
+```
+This utility flattens the `ToInstall` arrays from the Consensus JSON drops and outputs `report/FinalInstallationList.txt`.
+
+Inside this text file, all the core root packages are strictly listed line-by-line, and any unreached Virtual/Missing packages are safely appended purely as comments (`#`) at the bottom of the file for manual human review without breaking the package manager.

@@ -9,13 +9,20 @@ def find_super_roots():
     print("🔍 Scanning packages for group memberships...")
     
     with open(INPUT_JSON, 'r') as f:
-        roots = json.load(f)
+        pruned_map = json.load(f)
+
+    # Filter out everything that is strictly a dependency; keep only True Roots
+    roots = [pkg for pkg, data in pruned_map.items() if not data.get("is_dependency", True)]
 
     grouped_forest = {}
     standalone = []
 
     # Query paru for all root packages at once to save time
     # LANG=C forces English output for safe parsing
+    if not roots:
+        print("⚠️  No roots found to find super groups for!")
+        return
+
     try:
         result = subprocess.run(
             ['paru', '-Si'] + roots,
@@ -47,10 +54,14 @@ def find_super_roots():
             # Lock until the next package name
             current_pkg = None
 
-    # Structure the final JSON map
+    # Structure the final JSON map alongside the preserved dependencies
+    # Any package that had `is_dependency: True` goes natively here
+    dependencies_map = {pkg: data for pkg, data in pruned_map.items() if data.get("is_dependency", True)}
+
     final_output = {
         "SuperRoots": grouped_forest,
-        "StandalonePackages": sorted(standalone)
+        "StandalonePackages": sorted(standalone),
+        "Dependencies": dependencies_map
     }
 
     with open(OUTPUT_JSON, 'w') as f:

@@ -33,13 +33,13 @@ def find_file(directory, pattern):
     return None
 
 def compare_forests(master, host):
-    """Compares two OptimizedForest DAGs (SuperRoots + StandalonePackages)."""
-    to_install = {"SuperRoots": {}, "StandalonePackages": []}
-    already_exists = {"SuperRoots": {}, "StandalonePackages": []}
+    """Compares two OptimizedForest DAGs (SuperRoots, StandalonePackages, Dependencies)."""
+    to_install = {"SuperRoots": {}, "StandalonePackages": [], "Dependencies": {}}
+    already_exists = {"SuperRoots": {}, "StandalonePackages": [], "Dependencies": {}}
 
     # Normalize inputs: if they are flat lists, treat them as StandalonePackages (e.g., legacy MissingPackages)
-    master_dict = master if isinstance(master, dict) else {"SuperRoots": {}, "StandalonePackages": master if isinstance(master, list) else []}
-    host_dict = host if isinstance(host, dict) else {"SuperRoots": {}, "StandalonePackages": host if isinstance(host, list) else []}
+    master_dict = master if isinstance(master, dict) else {"SuperRoots": {}, "StandalonePackages": master if isinstance(master, list) else [], "Dependencies": {}}
+    host_dict = host if isinstance(host, dict) else {"SuperRoots": {}, "StandalonePackages": host if isinstance(host, list) else [], "Dependencies": {}}
 
     # 1. Compare Standalone Packages (1-to-1)
     master_standalone = set(master_dict.get("StandalonePackages", []))
@@ -68,6 +68,16 @@ def compare_forests(master, host):
         else:
             # Group is completely missing from host. Add all to ToInstall.
             to_install["SuperRoots"][group] = sorted(list(m_set))
+
+    # 3. Compare Strict Dependencies (Dictionary Key intersection)
+    master_deps = master_dict.get("Dependencies", {})
+    host_deps = host_dict.get("Dependencies", {})
+    
+    for dep, data in master_deps.items():
+        if dep in host_deps:
+            already_exists["Dependencies"][dep] = data
+        else:
+            to_install["Dependencies"][dep] = data
 
     return to_install, already_exists
 
