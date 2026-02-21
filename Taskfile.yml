@@ -57,3 +57,7 @@ tasks:
     desc: "Clean generated reports"
     cmds:
       - rm -rf report/*.json assets/IntermediateReports/* assets/Consensus/*
+
+  PrepCommit:
+    desc: "Wipe all generated JSON/TXT artifacts before a git commit to ensure a pristine tree"
+    deps: [Clean]
